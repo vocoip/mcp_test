@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pyyaml
+python-dotenv
+openai
+anthropic
+sseclient-py
+aiohttp

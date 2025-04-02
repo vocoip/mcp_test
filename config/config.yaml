@@ -1,0 +1,17 @@
+# openai:
+#   api_key: "your-openai-api-key"
+#   model_name: "gpt-3.5-turbo"
+
+# anthropic:
+#   api_key: "your-anthropic-api-key"
+#   model_name: "claude-2"
+
+dsr1:
+  api_key: "38001999-209f-498f-a8e6-9fb709c28908"
+  base_url: "https://ark.cn-beijing.volces.com/api/v3"
+  model_name: "ep-20250217050306-c7sc5"
+
+dsv3:
+  api_key: "38001999-209f-498f-a8e6-9fb709c28908"
+  base_url: "https://ark.cn-beijing.volces.com/api/v3"
+  model_name: "ep-20250401222444-k69nl"

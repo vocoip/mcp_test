@@ -1,0 +1,17 @@
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    # 从环境变量中读取您的方舟API Key
+    api_key=os.environ.get("ARK_API_KEY"), 
+    base_url="https://ark.cn-beijing.volces.com/api/v3",
+    )
+completion = client.chat.completions.create(
+    # 将推理接入点 <Model>替换为 Model ID
+    model="ep-20250217050306-c7sc5",
+    messages=[
+        {"role": "user", "content": "你好"}
+    ]
+)
+print(completion.choices[0].message)
+#   export ARK_API_KEY="38001999-209f-498f-a8e6-9fb709c28908"
