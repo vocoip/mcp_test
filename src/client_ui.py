@@ -22,7 +22,13 @@ def display_models(models):
     
     print("\n可用的模型列表:")
     for i, model in enumerate(models, 1):
-        print(f"{i}. {model}")
+        # 添加模型类型标识
+        if model.startswith("ep-") or model.startswith("vds"):
+            print(f"{i}. {model} (VolcEngine)")
+        elif model.startswith("deepseek") or model.startswith("ds"):
+            print(f"{i}. {model} (DeepSeek)")
+        else:
+            print(f"{i}. {model}")
     print()
 
 def main():
@@ -40,6 +46,7 @@ def main():
     
     print("欢迎使用MCP客户端交互界面")
     print("输入'exit'退出对话，输入'switch'切换模型，输入'reasoning'切换推理过程显示")
+    print("当前支持模型类型: VolcEngine, DeepSeek")
     
     # 显示是否启用推理过程
     show_reasoning = args.show_reasoning
@@ -113,7 +120,7 @@ def main():
         # 发送请求并显示响应
         start_time = time.time()
         # 简化请求状态显示
-        print("请求中...", end="", flush=True)
+        print("\r请求中...", end="", flush=True)
             
         # 使用流式对话功能
         try:
@@ -123,20 +130,32 @@ def main():
             response_started = False
             waiting_message_shown = False
             data_received = False
+            last_flush_time = time.time()
+            flush_interval = 0.0005  # 进一步减少刷新间隔到0.5ms，提高输出流畅度
             
+            # 清除请求状态提示
+            print("\r请求中...", end="", flush=True)
+            
+            # 使用生成器表达式直接迭代流式响应，添加更快的初始响应
             for chunk in client.conversation_stream(model_name, message, show_reasoning):
                 # 处理连接状态消息
                 if "status" in chunk:
                     # 极简化连接状态显示，只在必要时显示
                     if chunk["status"] == "connected":
-                        # 连接成功但还未收到数据时，不显示额外信息
-                        pass
+                        # 连接成功后立即清除请求状态，不等待数据接收
+                        print("\r" + " " * 20 + "\r", end="", flush=True)
                     elif chunk["status"] == "waiting" and "message" in chunk and not waiting_message_shown:
                         # 只在等待时间较长时显示一次等待消息
-                        print("\r正在等待模型响应...", flush=True)
+                        print("\r正在等待模型响应...", end="", flush=True)
                         waiting_message_shown = True
-                    # 其他状态消息全部忽略，减少视觉干扰
                     continue
+                
+                # 标记已收到数据，立即清除请求状态
+                if not data_received and ("reasoning" in chunk or "response" in chunk):
+                    print("\r" + " " * 20 + "\r", end="", flush=True)  # 清除整行的请求状态
+                    data_received = True
+                    # 立即刷新输出缓冲区
+                    print("", end="", flush=True)
                 
                 # 处理错误消息
                 if "error" in chunk:
@@ -150,35 +169,52 @@ def main():
                 if show_reasoning and "reasoning" in chunk and chunk["reasoning"]:
                     new_reasoning = chunk["reasoning"]
                     if not reasoning_started:
-                        # 如果是第一次收到数据，立即清除请求中的提示
-                        if not data_received:
-                            print("\r" + " " * 20 + "\r", end="")  # 清除整行的请求状态
-                            data_received = True
                         print("思考过程:")
                         reasoning_started = True
                     
-                    # 只打印新增的部分
+                    # 只打印新增的部分，并立即刷新
                     if len(new_reasoning) > len(current_reasoning):
-                        print(new_reasoning[len(current_reasoning):], end="", flush=True)
+                        new_content = new_reasoning[len(current_reasoning):]
+                        # 逐字符输出以提高流畅度
+                        for char in new_content:
+                            print(char, end="", flush=True)
+                            # 极小延迟，几乎不可察觉但能提高流畅度
+                            time.sleep(0.0001)
                         current_reasoning = new_reasoning
+                        last_flush_time = time.time()
                 
                 # 处理回答的实时输出
                 if "response" in chunk and chunk["response"]:
                     new_response = chunk["response"]
                     if not response_started:
-                        # 如果是第一次收到数据，立即清除请求中的提示
-                        if not data_received:
-                            print("\r" + " " * 20 + "\r", end="")  # 清除整行的请求状态
-                            data_received = True
                         if reasoning_started:
                             print("\n\n-----------------\n")
                         print("AI: ", end="", flush=True)
                         response_started = True
                     
-                    # 只打印新增的部分
+                    # 只打印新增的部分，并立即刷新
                     if len(new_response) > len(current_response):
-                        print(new_response[len(current_response):], end="", flush=True)
+                        new_content = new_response[len(current_response):]
+                        # 逐字符输出以提高流畅度
+                        for char in new_content:
+                            print(char, end="", flush=True)
+                            # 极小延迟，几乎不可察觉但能提高流畅度
+                            time.sleep(0.0001)
                         current_response = new_response
+                        last_flush_time = time.time()
+                
+                # 强制定期刷新输出缓冲区，确保流畅显示
+                current_time = time.time()
+                if current_time - last_flush_time > flush_interval:
+                    # 使用空字符串刷新，减少视觉干扰
+                    print("", end="", flush=True)
+                    last_flush_time = current_time
+                    
+                # 动态调整延迟，在有数据时减少延迟，提高响应性
+                if data_received:
+                    time.sleep(0.0002)  # 数据流动时使用更小的延迟
+                else:
+                    time.sleep(0.0005)  # 等待数据时使用稍大的延迟
             
             # 完成后打印换行和耗时
             elapsed_time = time.time() - start_time

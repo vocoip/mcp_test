@@ -16,6 +16,16 @@ class MCPClient:
         self.max_retries = max_retries  # 最大重试次数
         self.retry_delay = retry_delay  # 重试延迟时间(秒)
         self.timeout = ClientTimeout(total=60, connect=2)  # 设置默认超时时间
+        self.model_providers = {
+            "ep-": "VolcEngine",
+            "vds": "VolcEngine",
+            "deepseek": "DeepSeek",
+            "ds": "DeepSeek",
+            "dsr": "DeepSeek",  # 添加dsr前缀识别
+            "dsv": "DeepSeek",  # 添加dsv前缀识别
+            "gpt-": "OpenAI",
+            "claude-": "Anthropic"
+        }  # 支持更多模型提供商
 
     @backoff.on_exception(backoff.expo, requests.exceptions.RequestException, max_tries=3, jitter=None)
     def _check_connection(self) -> bool:
@@ -63,11 +73,26 @@ class MCPClient:
     def generate(self, model_name: str, prompt: str) -> Dict[str, Any]:
         """调用单个模型生成响应（同步版本）"""
         url = f"{self.base_url}/generate/{model_name}"
+        
+        # 检查模型名称，确保正确识别DeepSeek模型
+        model_provider = None
+        for prefix, provider in self.model_providers.items():
+            if model_name.startswith(prefix):
+                model_provider = provider
+                break
+                
+        # 构造请求数据
+        data = {"prompt": prompt}
+        
+        # 如果是DeepSeek模型，添加特殊处理
+        if model_provider == "DeepSeek":
+            data["provider"] = "deepseek"
+            
         try:
             response = requests.post(
                 url,
                 headers=self.headers,
-                json={"prompt": prompt},
+                json=data,
                 timeout=10  # 设置合理的超时时间
             )
             response.raise_for_status()
@@ -81,9 +106,24 @@ class MCPClient:
     async def generate_async(self, model_name: str, prompt: str) -> Dict[str, Any]:
         """调用单个模型生成响应（异步版本）"""
         url = f"{self.base_url}/generate/{model_name}"
+        
+        # 检查模型名称，确保正确识别DeepSeek模型
+        model_provider = None
+        for prefix, provider in self.model_providers.items():
+            if model_name.startswith(prefix):
+                model_provider = provider
+                break
+                
+        # 构造请求数据
+        data = {"prompt": prompt}
+        
+        # 如果是DeepSeek模型，添加特殊处理
+        if model_provider == "DeepSeek":
+            data["provider"] = "deepseek"
+            
         try:
             async with ClientSession(timeout=self.timeout) as session:
-                async with session.post(url, headers=self.headers, json={"prompt": prompt}) as response:
+                async with session.post(url, headers=self.headers, json=data) as response:
                     response.raise_for_status()
                     return await response.json()
         except aiohttp.ClientResponseError as e:
@@ -95,10 +135,14 @@ class MCPClient:
     def generate_all(self, prompt: str) -> Dict[str, Any]:
         """调用所有模型生成响应（同步版本）"""
         url = f"{self.base_url}/generate_all"
+        
+        # 构造请求数据
+        data = {"prompt": prompt, "provider_info": True}
+        
         try:
             response = requests.post(
                 url, 
-                json={"prompt": prompt},
+                json=data,
                 headers=self.headers,
                 timeout=15  # 设置较长的超时时间，因为需要调用多个模型
             )
@@ -110,9 +154,13 @@ class MCPClient:
     async def generate_all_async(self, prompt: str) -> Dict[str, Any]:
         """调用所有模型生成响应（异步版本）"""
         url = f"{self.base_url}/generate_all"
+        
+        # 构造请求数据
+        data = {"prompt": prompt, "provider_info": True}
+        
         try:
             async with ClientSession(timeout=ClientTimeout(total=30)) as session:  # 设置更长的超时时间
-                async with session.post(url, json={"prompt": prompt}, headers=self.headers) as response:
+                async with session.post(url, json=data, headers=self.headers) as response:
                     response.raise_for_status()
                     return await response.json()
         except aiohttp.ClientResponseError as e:
@@ -128,11 +176,22 @@ class MCPClient:
         # 添加用户消息到历史
         self.conversation_history.append({"role": "user", "content": message})
         
+        # 检查模型名称，确保正确识别DeepSeek模型
+        model_provider = None
+        for prefix, provider in self.model_providers.items():
+            if model_name.startswith(prefix):
+                model_provider = provider
+                break
+        
         # 构造请求数据
         data = {
             "model_name": model_name,
             "messages": self.conversation_history
         }
+        
+        # 如果是DeepSeek模型，添加特殊处理
+        if model_provider == "DeepSeek":
+            data["provider"] = "deepseek"
         
         # 如果需要显示推理过程，添加相应参数
         if show_reasoning:
@@ -172,12 +231,24 @@ class MCPClient:
         # 添加用户消息到历史
         self.conversation_history.append({"role": "user", "content": message})
         
+        # 检查模型名称，确保正确识别DeepSeek模型
+        model_provider = None
+        for prefix, provider in self.model_providers.items():
+            if model_name.startswith(prefix):
+                model_provider = provider
+                break
+        
         # 构造请求数据
         data = {
             "model_name": model_name,
             "messages": self.conversation_history,
-            "show_reasoning": show_reasoning
+            "show_reasoning": show_reasoning,
+            "char_by_char": True  # 启用逐字输出模式
         }
+        
+        # 如果是DeepSeek模型，添加特殊处理
+        if model_provider == "DeepSeek":
+            data["provider"] = "deepseek"
         
         try:
             async with ClientSession(timeout=self.timeout) as session:
@@ -207,12 +278,24 @@ class MCPClient:
         # 添加用户消息到历史
         self.conversation_history.append({"role": "user", "content": message})
         
+        # 检查模型名称，确保正确识别DeepSeek模型
+        model_provider = None
+        for prefix, provider in self.model_providers.items():
+            if model_name.startswith(prefix):
+                model_provider = provider
+                break
+        
         # 构造请求数据
         data = {
             "model_name": model_name,
             "messages": self.conversation_history,
-            "show_reasoning": show_reasoning
+            "show_reasoning": show_reasoning,
+            "char_by_char": True  # 启用逐字输出模式
         }
+        
+        # 如果是DeepSeek模型，添加特殊处理
+        if model_provider == "DeepSeek":
+            data["provider"] = "deepseek"
         
         try:
             # 使用SSE客户端获取流式响应，设置更短的连接超时以提高响应速度
@@ -221,46 +304,36 @@ class MCPClient:
                 json=data,
                 headers=self.headers,
                 stream=True,
-                timeout=(0.5, 60.0)  # 减少连接超时到0.5秒，提高响应速度
+                timeout=(0.3, 60.0)  # 连接超时0.3秒，读取超时60秒
             )
             
             if response.status_code == 200:
                 # 初始化变量
-                first_event_received = False
                 final_response = ""
-                
-                # 直接初始化SSEClient并获取事件迭代器
-                client = SSEClient(response)
-                events_iterator = client.events()
                 
                 # 立即发送连接状态，让用户知道请求已发送
                 yield {"status": "connected", "message": "已连接到服务器"}
                 
-                while True:
-                    try:
-                        # 获取下一个事件
-                        try:
-                            event = next(events_iterator)
-                            # 标记已收到第一个事件
-                            first_event_received = True
-                        except StopIteration:
-                            break
+                # 使用原始响应对象直接读取数据流，避免SSEClient可能的缓冲
+                for line in response.iter_lines():
+                    if not line:
+                        continue
                         
-                        if event.data:
+                    # 解析SSE格式的数据行
+                    line = line.decode('utf-8')
+                    if line.startswith('data: '):
+                        data_str = line[6:]
+                        if data_str:
                             try:
-                                chunk_data = json.loads(event.data)
+                                # 立即解析并处理数据，减少处理延迟
+                                chunk_data = json.loads(data_str)
                                 yield chunk_data
                                 
                                 # 保存最终响应用于历史记录
-                                if "response" in chunk_data and chunk_data["response"]:
+                                if "response" in chunk_data and chunk_data["response"] is not None:
                                     final_response = chunk_data["response"]
                             except json.JSONDecodeError:
                                 yield {"error": "无法解析服务器响应"}
-                    except StopIteration:
-                        break
-                    except Exception as e:
-                        yield {"error": f"接收事件时出错: {str(e)}"}
-                        break
                 
                 # 将最终助手消息添加到历史记录
                 if final_response:
@@ -286,7 +359,8 @@ class MCPClient:
         data = {
             "model_name": model_name,
             "messages": self.conversation_history,
-            "show_reasoning": show_reasoning
+            "show_reasoning": show_reasoning,
+            "char_by_char": True  # 启用逐字输出模式
         }
         
         try:
@@ -305,18 +379,15 @@ class MCPClient:
                     # 立即发送连接状态
                     yield {"status": "connected", "message": "已连接到服务器"}
                     
-                    # 处理SSE流
-                    buffer = ""
+                    # 处理SSE流，优化为逐字符处理
                     async for line in response.content:
                         line = line.decode('utf-8')
-                        buffer += line
                         
-                        if buffer.endswith('\n\n'):
-                            if buffer.startswith('data: '):
-                                data_str = buffer[6:].strip()
-                                buffer = ""
-                                
-                                if data_str:
+                        # 直接处理每一行数据，不使用缓冲区
+                        if line.startswith('data: '):
+                            data_str = line[6:]
+                            
+                            if data_str:
                                     try:
                                         chunk_data = json.loads(data_str)
                                         yield chunk_data

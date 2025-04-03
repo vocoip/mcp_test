@@ -70,7 +70,7 @@ class MCPService:
         print(f"[PERF] conversation request took {elapsed:.3f} seconds")
         return response
         
-    async def conversation_stream(self, model_name: str, messages: List[Dict[str, str]], show_reasoning: bool = False):
+    async def conversation_stream(self, model_name: str, messages: List[Dict[str, str]], show_reasoning: bool = False, char_by_char: bool = True):
         """流式对话方法，支持实时输出推理过程"""
         if model_name not in self.models:
             raise ValueError(f"Model {model_name} not found")
@@ -116,7 +116,7 @@ class MCPService:
                 "reasoning": "",
                 "response": "",
                 "last_yield_time": time.time(),
-                "yield_interval": 0.05  # 控制输出频率，50ms
+                "yield_interval": 0.0  # 已移除输出频率限制，但还需要进一步优化
             }
             
             # 调用模型的流式API
@@ -134,7 +134,8 @@ class MCPService:
                         state["phase"] = "reasoning"
                         reasoning_text = full_response.split("思考：", 1)[1]
                         state["reasoning"] = reasoning_text
-                        if show_reasoning and now - state["last_yield_time"] >= state["yield_interval"]:
+                        if show_reasoning:
+                            # 移除时间间隔检查，立即输出每个字符
                             yield {"reasoning": reasoning_text, "response": ""}
                             state["last_yield_time"] = now
                 
@@ -156,9 +157,9 @@ class MCPService:
                         new_reasoning = full_response.split("思考：", 1)[1]
                         if new_reasoning != state["reasoning"] and show_reasoning:
                             state["reasoning"] = new_reasoning
-                            if now - state["last_yield_time"] >= state["yield_interval"]:
-                                yield {"reasoning": new_reasoning, "response": ""}
-                                state["last_yield_time"] = now
+                            # 移除时间间隔检查，立即输出每个字符
+                            yield {"reasoning": new_reasoning, "response": ""}
+                            state["last_yield_time"] = now
                 
                 elif state["phase"] == "response":
                     # 已进入回答阶段，持续更新回答内容
@@ -166,9 +167,9 @@ class MCPService:
                         new_response = full_response.split("回答：", 1)[1]
                         if new_response != state["response"]:
                             state["response"] = new_response
-                            if now - state["last_yield_time"] >= state["yield_interval"]:
-                                yield {"reasoning": state["reasoning"] if show_reasoning else "", "response": new_response}
-                                state["last_yield_time"] = now
+                            # 移除时间间隔检查，立即输出每个字符
+                            yield {"reasoning": state["reasoning"] if show_reasoning else "", "response": new_response}
+                            state["last_yield_time"] = now
             
             # 最终处理，确保完整输出
             if state["phase"] == "init":

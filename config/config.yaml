@@ -6,12 +6,31 @@
 #   api_key: "your-anthropic-api-key"
 #   model_name: "claude-2"
 
-dsr1:
+vdsr1:
   api_key: "38001999-209f-498f-a8e6-9fb709c28908"
   base_url: "https://ark.cn-beijing.volces.com/api/v3"
   model_name: "ep-20250217050306-c7sc5"
 
-dsv3:
+vdsv3:
   api_key: "38001999-209f-498f-a8e6-9fb709c28908"
   base_url: "https://ark.cn-beijing.volces.com/api/v3"
   model_name: "ep-20250401222444-k69nl"
+
+dsv3:
+  api_key: "sk-f0556f50b34849b6a9ab5e55776e93bb"
+  base_url: "https://api.deepseek.com"
+  model_name: "deepseek-chat"
+
+dsr1:
+  api_key: "sk-f0556f50b34849b6a9ab5e55776e93bb"
+  base_url: "https://api.deepseek.com"
+  model_name: "deepseek-chat"
+
+# 示例配置，请替换为实际值
+# openai:
+#   api_key: "your-openai-api-key"
+#   model_name: "gpt-4"
+
+# anthropic:
+#   api_key: "your-anthropic-api-key"
+#   model_name: "claude-3-opus"

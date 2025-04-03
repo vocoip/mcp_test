@@ -10,7 +10,7 @@ class BaseModel(ABC):
         pass
 
     @abstractmethod
-    async def conversation(self, messages: List[Dict[str, str]]) -> str:
+    async def conversation(self, messages: List[Dict[str, str]], show_reasoning: bool = False) -> Any:
         pass
         
     async def conversation_with_reasoning(self, messages: List[Dict[str, str]]) -> Dict[str, Any]:
@@ -73,7 +73,7 @@ class AnthropicModel(BaseModel):
         )
         return response.completion
         
-    async def conversation(self, messages: List[Dict[str, str]]) -> str:
+    async def conversation(self, messages: List[Dict[str, str]], show_reasoning: bool = False) -> Any:
         try:
             prompt = "\n\n".join([f"{m['role']}: {m['content']}" for m in messages])
             response = self.client.completion(
@@ -90,11 +90,38 @@ class VolcEngineModel(BaseModel):
         super().__init__(config)
         import os
         import openai
-        self.client = openai.OpenAI(
-            api_key=os.environ.get("ARK_API_KEY") or self._get_config("api_key"),
-            base_url=self._get_config("base_url", "https://ark.cn-beijing.volces.com/api/v3")
-        )
+        import httpx
+        self.base_url = self._get_config("base_url", "https://ark.cn-beijing.volces.com/api/v3")
+        self.api_key = os.environ.get("ARK_API_KEY") or self._get_config("api_key")
+        self.httpx = httpx
+        self.timeout = 30.0
+        self.api_version = ""
+        
+        # 判断是否为DeepSeek模型
+        self.is_deepseek = "deepseek.com" in self.base_url
+        
+        # 根据模型类型调整API版本和URL
+        if self.is_deepseek:
+            # DeepSeek API不需要在base_url后添加api_version
+            self.client = openai.OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url
+            )
+        else:
+            # 火山引擎API
+            self.client = openai.OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url
+            )
+            
         self.model = self._get_config("model_name", "ep-20250217050306-c7sc5")
+        # 确保DeepSeek模型名称正确
+        if self.is_deepseek and not self.model.startswith("deepseek-"):
+            # 如果配置中的模型名称不是以deepseek-开头，则根据URL自动调整
+            if "v3" in self.base_url:
+                self.model = "deepseek-v3"
+            elif "r1" in self.base_url:
+                self.model = "deepseek-r1"
 
     def _get_config(self, key: str, default=None):
         """安全获取配置项"""
@@ -148,17 +175,67 @@ class VolcEngineModel(BaseModel):
             )
             return completion.choices[0].message.content
         except Exception as e:
-            raise Exception(f"VolcEngine生成失败: {str(e)}")
+            error_msg = str(e)
+            if self.is_deepseek:
+                error_msg = f"DeepSeek生成失败: {error_msg}"
+            else:
+                error_msg = f"VolcEngine生成失败: {error_msg}"
+            raise Exception(error_msg)
 
-    async def conversation(self, messages: List[Dict[str, str]]) -> str:
+    async def conversation(self, messages: List[Dict[str, str]], show_reasoning: bool = False) -> Any:
         try:
-            completion = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages
-            )
-            return completion.choices[0].message.content
+            # 如果需要显示推理过程，添加系统消息要求模型展示推理过程
+            if show_reasoning:
+                system_message = {"role": "system", "content": "请先进行思考，分析问题并给出推理过程，然后再给出最终答案。格式为：\n\n思考：[你的分析和推理过程]\n\n回答：[你的最终答案]"}
+                
+                # 检查是否已有系统消息
+                has_system = any(msg.get("role", "") == "system" for msg in messages)
+                
+                # 构建新的消息列表
+                if has_system:
+                    new_messages = []
+                    for msg in messages:
+                        if msg.get("role", "") == "system":
+                            msg["content"] = system_message["content"]
+                        new_messages.append(msg)
+                else:
+                    new_messages = [system_message] + messages
+                
+                # 使用新的消息列表
+                completion = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=new_messages
+                )
+                
+                # 解析响应，提取推理过程和最终答案
+                full_response = completion.choices[0].message.content
+                reasoning = ""
+                answer = full_response
+                
+                # 尝试分离思考和回答部分
+                if "思考：" in full_response and "回答：" in full_response:
+                    parts = full_response.split("回答：")
+                    if len(parts) >= 2:
+                        answer = parts[1].strip()
+                        reasoning_part = parts[0]
+                        if "思考：" in reasoning_part:
+                            reasoning = reasoning_part.split("思考：")[1].strip()
+                
+                return {"response": answer, "reasoning": reasoning}
+            else:
+                # 普通对话模式
+                completion = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages
+                )
+                return completion.choices[0].message.content
         except Exception as e:
-            raise Exception(f"VolcEngine对话失败: {str(e)}")
+            error_msg = str(e)
+            if self.is_deepseek:
+                error_msg = f"DeepSeek API调用失败: {error_msg}"
+            else:
+                error_msg = f"VolcEngine对话失败: {error_msg}"
+            raise Exception(error_msg)
             
     async def conversation_stream(self, messages: List[Dict[str, str]]):
         """流式对话方法，支持实时输出"""
@@ -175,7 +252,12 @@ class VolcEngineModel(BaseModel):
                 if chunk.choices and chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
         except Exception as e:
-            raise Exception(f"VolcEngine流式对话失败: {str(e)}")
+            error_msg = str(e)
+            if self.is_deepseek:
+                error_msg = f"DeepSeek API调用失败: {error_msg}"
+            else:
+                error_msg = f"VolcEngine流式对话失败: {error_msg}"
+            raise Exception(error_msg)
             
     async def conversation_with_reasoning(self, messages: List[Any]) -> Dict[str, Any]:
         """带有推理过程的对话方法，返回模型的推理过程和最终回答"""
