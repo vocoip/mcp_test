@@ -14,4 +14,3 @@ completion = client.chat.completions.create(
     ]
 )
 print(completion.choices[0].message)
-#   export ARK_API_KEY="38001999-209f-498f-a8e6-9fb709c28908"

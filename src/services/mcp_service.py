@@ -53,16 +53,18 @@ class MCPService:
             raise ValueError(f"Model {model_name} not found")
             
         start_time = time.time()
-        if show_reasoning:
-            # 如果需要显示推理过程，调用带有推理参数的方法
-            result = await self.models[model_name].conversation_with_reasoning(messages)
-            response = {"response": result["response"]}
-            if "reasoning" in result:
-                response["reasoning"] = result["reasoning"]
+        
+        # 直接将show_reasoning参数传递给模型的conversation方法
+        # 所有模型的conversation方法都应该支持show_reasoning参数
+        result = await self.models[model_name].conversation(messages, show_reasoning)
+        
+        # 处理返回结果
+        if isinstance(result, dict):
+            # 如果返回的是字典，直接使用
+            response = result
         else:
-            # 否则调用普通的对话方法
-            result = await self.models[model_name].conversation(messages)
-            response = result if isinstance(result, dict) else {"response": result}
+            # 如果返回的是字符串，封装为字典
+            response = {"response": result}
             
         elapsed = time.time() - start_time
         
