@@ -1,8 +1,25 @@
-fastapi
-uvicorn
-pyyaml
-python-dotenv
-openai
-anthropic
-sseclient-py
-aiohttp
+# Web框架和服务器
+fastapi>=0.68.0,<0.69.0  # FastAPI Web框架
+uvicorn>=0.15.0,<0.16.0  # ASGI服务器
+
+# 配置和工具
+pyyaml>=6.0.0,<7.0.0  # YAML配置文件解析
+python-dotenv>=0.19.0,<0.20.0  # 环境变量管理
+
+# API客户端
+openai>=1.0.0,<2.0.0  # OpenAI API客户端
+
+# HTTP客户端
+aiohttp>=3.8.0,<4.0.0  # 异步HTTP客户端
+requests>=2.31.0,<3.0.0  # 同步HTTP客户端
+
+# 流式响应支持
+sseclient-py>=1.7.0,<2.0.0  # SSE客户端支持
+
+# 工具和实用程序
+backoff>=2.2.0,<3.0.0  # 重试机制
+colorama>=0.4.6,<0.5.0  # 终端颜色支持
+
+# 测试
+pytest>=7.0.0,<8.0.0  # 测试框架
+pytest-asyncio>=0.21.0,<0.22.0  # 异步测试支持
